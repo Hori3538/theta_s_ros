@@ -19,8 +19,10 @@ void ImageConverter::image_callback(const sensor_msgs::ImageConstPtr& received_i
         ROS_ERROR("cv_bridge exception: %s", ex.what());
         return;
     }
-    cv::Mat cv_image(cv_image_ptr->image.rows, cv_image_ptr->image.cols, cv_image_ptr->image.type());
-    cv_image = cv_image_ptr->image;
+    cv::Mat cv_image = cv_image_ptr->image;
+    // thetaから得られる生画像に含まれるいらない領域を省く
+    // 720*1280 -> 640*1280
+    cv_image = cv_image(cv::Rect(0, 0, cv_image.cols, cv_image.cols/2));
 
     ROS_DEBUG("fisheye image to equirectangular image");
     static ThetaConversion theta_conversion(cv_image.cols, cv_image.rows);
@@ -29,6 +31,13 @@ void ImageConverter::image_callback(const sensor_msgs::ImageConstPtr& received_i
     ROS_DEBUG("cv image to output ros image");
     sensor_msgs::ImagePtr output_image = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cv_image).toImageMsg();
     output_image->header = received_image->header;
+
+    // thetaから得られる生画像にはstampが含まれないので
+    // headerのstampがないときの処理
+    if(output_image->header.stamp.sec == 0){
+        output_image->header.stamp = ros::Time::now();
+    }
+
     image_pub.publish(output_image);
 
     ROS_INFO("[image_converter:image_callback] elapsed time : %f [sec]", ros::Time::now().toSec() - start_time);
